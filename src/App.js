@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import script from './python/script.py';
-import { Button, Container, Grid, Paper, TextField, Typography } from '@material-ui/core'
+import { Button, Container, Grid, IconButton, Paper, TextField, Typography } from '@material-ui/core'
 import './App.css';
 import { textdata } from './data.js';
 import * as localForage from 'localforage';
@@ -8,6 +8,7 @@ import { makeStyles } from '@material-ui/core/styles';
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemText from '@material-ui/core/ListItemText';
+import RefreshIcon from '@material-ui/icons/Refresh';
 
 const useStyles = makeStyles((theme) => ({
   listSection: {
@@ -39,10 +40,50 @@ const useStyles = makeStyles((theme) => ({
 
 export const Custom = ({ textVal, setTextVal, runEffect }) => {
   const classes = useStyles();
-  const [temtText, setTempText] = useState(textVal)
+  const [temtText, setTempText] = useState()
   const refresh = (e) => {
     e.preventDefault()
     window.location.reload()
+  } 
+  useEffect(() => {
+    localForage.getItem('sometext').then(function(value) {
+      // This code runs once the value has been loaded
+      // from the offline store.
+      if(value===null){
+        localForage.setItem('sometext', textdata[0].toString()).then(function (value) {
+          setTextVal(value)
+          setTempText(value)
+              console.log(value);
+          }).catch(function(err) {
+              // This code runs if there were any errors
+              console.log(err);
+          });
+      }
+      else {
+        localForage.getItem('sometext').then(function (value) {
+          setTextVal(value)
+          setTempText(value)
+            console.log(value);
+          }).catch(function(err) {
+              // This code runs if there were any errors
+              console.log(err);
+          });
+      }
+  }).catch(function(err) {
+      // This code runs if there were any errors
+      console.log(err);
+  });
+  },[])
+
+  const HandleText = (e) => {
+    setTempText(e.target.value)
+    localForage.setItem('sometext', e.target.value).then(function (value) {
+      setTextVal(value)
+          console.log(value);
+      }).catch(function(err) {
+          // This code runs if there were any errors
+          console.log(err);
+      });
   } 
   return(
     <div className={classes.text}>
@@ -55,9 +96,9 @@ export const Custom = ({ textVal, setTextVal, runEffect }) => {
           multiline
           rows={8}
           fullWidth
-          value={temtText}
+          value={temtText || ""}
           variant="outlined"
-          onChange={(e) => {setTextVal(e.target.value)}}
+          onChange={(e) => {HandleText(e)}}
         />
         <Button 
         variant="contained" 
@@ -66,23 +107,24 @@ export const Custom = ({ textVal, setTextVal, runEffect }) => {
         >
         Process
         </Button>
-        <Button 
+        <IconButton 
         variant="contained" 
-        color="secondary"
+        color="primary"
+
         onClick={(e) => refresh(e)}
         >
-        Refresh
-        </Button>
+        <RefreshIcon />
+        </IconButton>
         </div>
   )
 } 
 
 function App() {
   const classes = useStyles();
-  
   const mounted = useRef(false);
   const [output, setOutput] = useState([]);
   const [textVal, setTextVal] = useState()
+  const [processing, setProcessing] = useState(false)
 
   // const runScript = code => {
   //   window.pyodide.loadPackage([]).then(() => {
@@ -98,26 +140,28 @@ function App() {
 
   
   const runEffect = async () => {
-    const trainCode = await loadModule(script);
-    window.languagePluginLoader
-      .then(() => {
-        if (mounted.current === false){
-          mounted.current = true;
-          return window.pyodide.loadPackage(['micropip']);
-          
-        }
-      })
-      .then(() => {
-        const py = window.pyodide;
-          const output = py.runPython(trainCode);
-          output.then((res) => {
-            console.log(res)
-            setOutput(res);
-          })
-          window.data = {
-            textdata: textVal
-          };
-      })
+      setProcessing(true)
+      const trainCode = await loadModule(script);
+      window.languagePluginLoader
+        .then(() => {
+          if (mounted.current === false){
+            mounted.current = true;
+            return window.pyodide.loadPackage(['micropip']);
+          }
+        })
+        .then(() => {
+          const py = window.pyodide;
+            const output = py.runPython(trainCode);
+            output.then((res) => {
+              if(res){
+                setProcessing(false)
+              }
+              setOutput(res);
+            })
+            window.data = {
+              textdata: textVal
+            };
+        })
   }
   
 
@@ -136,14 +180,19 @@ function App() {
             Results from python scripts:
           </Typography>
           <div className={classes.demo}>
-          <List className={classes.root} subheader={<li />}>
-          {output.map((item, index) => (
-            <ListItem key={index}>
-              <ListItemText primary={`${item}`} />
-            </ListItem>
-          ))}
-        
-      </List>
+          {(output && processing === false) ? (
+            <List className={classes.root} subheader={<li />}>
+            {output.map((item, index) => (
+              <ListItem key={index}>
+                <ListItemText primary={`${item}`} />
+              </ListItem>
+            ))}
+            </List>
+          ) : 
+          <Typography style={{fontWeight:300}} variant="h6" className={classes.title}>
+            Loading...
+          </Typography>
+          }
     </div>
     </Grid>
       </Grid>
